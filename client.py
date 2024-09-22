@@ -1,25 +1,31 @@
-from websockets.client import connect
+from websockets.asyncio.client import connect
 import asyncio
 import json
+import sys
 
-flag = False
-name = "User"
-async def chat():
-    global flag
-    global name
-    if flag is False:
-        name = input("Enter your name to start chatting: ")
-    async with connect("ws://localhost:8765") as ws:
-
-        if flag is False:
-            await ws.send(json.dumps(["", name]))
-            flag = True
-        else:
-            message = input(f'{name}: ')
-            await ws.send(json.dumps([message, name]))
-
-            latest_message = await ws.recv()
-            print(latest_message)
-        await chat()
+async def receive_message(ws, name):
+    while True:
+        latest_message = await ws.recv()
+        sys.stdout.write('\r' + ' ' * (len(latest_message) + 50) + '\r')
+        print(f"{latest_message}")
         
-asyncio.run(chat())
+        sys.stdout.write(f'{name}: ')
+        sys.stdout.flush()
+        await asyncio.sleep(1)
+
+async def send_message(name, ws):
+    while True:
+        # Use asyncio.to_thread to run the blocking input() in a separate thread
+        msg = await asyncio.to_thread(input, f'{name}: ')
+        await ws.send(json.dumps([msg, name]))
+
+async def main():
+    name = input("Enter your name to start chatting: ")
+    async with connect("ws://localhost:8765") as ws:
+        # Create and manage the receive and send tasks concurrently
+        await asyncio.gather(
+            receive_message(ws, name),
+            send_message(name, ws)
+        )
+
+asyncio.run(main())
